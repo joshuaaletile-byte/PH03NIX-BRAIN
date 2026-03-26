@@ -3,29 +3,59 @@ import requests
 import os
 import threading
 import time
-from personality import build_personality
 from memory import add_message, get_memory_summary
 
 app = Flask(__name__)
 
-# 🔑 CONFIG
+# 🔑 KEYS
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
+
 BASE = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
-MODEL_API = "https://api-inference.huggingface.co/models/google/flan-t5-base"
+# 🧠 REAL AI FUNCTION
+def ai_reply(user, message):
 
-# 🧠 AI MODEL
-def query_model(prompt):
+    # MEMORY COMMANDS
+    if "remember" in message.lower():
+        add_message(user, message, "stored")
+        return "Noted. I will remember that."
+
+    if "recall" in message.lower():
+        return get_memory_summary(user)
+
     try:
-        r = requests.post(MODEL_API, json={"inputs": prompt}, timeout=60)
-        data = r.json()
-        if isinstance(data, list):
-            return data[0]["generated_text"]
-        return "Processing..."
-    except:
-        return "Systems stabilizing..."
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "mistralai/mistral-7b-instruct",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You are PH03NIX, a smart AI like JARVIS. Be intelligent, clear, and slightly futuristic."
+                    },
+                    {
+                        "role": "user",
+                        "content": message
+                    }
+                ]
+            },
+            timeout=30
+        )
 
-# 🌐 WEB ROUTES
+        data = response.json()
+
+        return data["choices"][0]["message"]["content"]
+
+    except Exception as e:
+        print("AI error:", e)
+        return "Systems are stabilizing... try again."
+
+# 🌐 WEB
 @app.route("/")
 def home():
     return render_template("chat.html")
@@ -33,31 +63,19 @@ def home():
 @app.route("/send", methods=["POST"])
 def send():
     data = request.json
-
     user = data.get("username", "User")
     message = data.get("message", "")
 
-    # MEMORY
-    if "remember" in message.lower():
-        add_message(user, message, "Stored")
-        return jsonify({"reply": "Noted. Memory stored."})
-
-    if "recall" in message.lower():
-        return jsonify({"reply": get_memory_summary(user)})
-
-    personality = build_personality(user)
-
-    prompt = f"{personality}\nUser: {message}\nAI:"
-    reply = query_model(prompt)
+    reply = ai_reply(user, message)
 
     add_message(user, message, reply)
 
     return jsonify({"reply": reply})
 
-# 🤖 TELEGRAM BOT LOOP
+# 🤖 TELEGRAM BOT
 def telegram_bot():
     offset = None
-    print("Telegram bot started")
+    print("Telegram bot running...")
 
     while True:
         try:
@@ -76,12 +94,7 @@ def telegram_bot():
                 chat_id = item["message"]["chat"]["id"]
                 user = item["message"]["from"].get("first_name", "User")
 
-                r = requests.post("http://127.0.0.1:5000/send", json={
-                    "username": user,
-                    "message": msg
-                }).json()
-
-                reply = r.get("reply", "Thinking...")
+                reply = ai_reply(user, msg)
 
                 requests.post(f"{BASE}/sendMessage", json={
                     "chat_id": chat_id,
@@ -94,7 +107,7 @@ def telegram_bot():
             print("Bot error:", e)
             time.sleep(5)
 
-# 🚀 START BOT THREAD
+# START BOT
 def start_bot():
     if BOT_TOKEN:
         thread = threading.Thread(target=telegram_bot)
@@ -103,7 +116,7 @@ def start_bot():
 
 start_bot()
 
-# ▶️ RUN
+# RUN
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
