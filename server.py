@@ -1,4 +1,4 @@
- from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template
 import requests
 import os
 import threading
@@ -11,7 +11,6 @@ app = Flask(__name__)
 # 🔑 CONFIG
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 BASE = f"https://api.telegram.org/bot{BOT_TOKEN}"
-AI_URL = "http://127.0.0.1:5000/send"
 
 MODEL_API = "https://api-inference.huggingface.co/models/google/flan-t5-base"
 
@@ -38,6 +37,7 @@ def send():
     user = data.get("username", "User")
     message = data.get("message", "")
 
+    # MEMORY
     if "remember" in message.lower():
         add_message(user, message, "Stored")
         return jsonify({"reply": "Noted. Memory stored."})
@@ -54,10 +54,10 @@ def send():
 
     return jsonify({"reply": reply})
 
-# 🤖 TELEGRAM BOT LOOP (FREE METHOD)
+# 🤖 TELEGRAM BOT LOOP
 def telegram_bot():
     offset = None
-    print("🤖 Telegram bot running...")
+    print("Telegram bot started")
 
     while True:
         try:
@@ -76,7 +76,6 @@ def telegram_bot():
                 chat_id = item["message"]["chat"]["id"]
                 user = item["message"]["from"].get("first_name", "User")
 
-                # 🔗 Call local AI
                 r = requests.post("http://127.0.0.1:5000/send", json={
                     "username": user,
                     "message": msg
@@ -104,7 +103,7 @@ def start_bot():
 
 start_bot()
 
-# 🔥 RUN SERVER
+# ▶️ RUN
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
