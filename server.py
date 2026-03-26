@@ -1,8 +1,8 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 import requests
 import os
 from personality import build_personality
-from memory import add_message, load
+from memory import add_message, get_memory_summary
 
 app = Flask(__name__)
 
@@ -20,32 +20,28 @@ def query_model(prompt):
     except:
         return "Systems initializing..."
 
-# 🧠 Memory recall
-def recall_memory(user):
-    data = load()
-    if user in data:
-        last = data[user][-3:]
-        return "Here is what I remember:\n" + "\n".join([f"You said: {x['message']}" for x in last])
-    return "No memory found."
+# 🧠 MAIN PAGE
+@app.route("/")
+def home():
+    return render_template("chat.html")
 
-@app.route("/chat", methods=["POST"])
-def chat():
+# 🧠 CHAT API
+@app.route("/send", methods=["POST"])
+def send():
     data = request.json
 
-    user = data.get("user", "User")
+    user = data.get("username", "User")
     message = data.get("message", "")
-    is_admin = data.get("admin", False)
-    mode = data.get("mode", "PH03NIX")
 
-    # 🧠 Memory command
+    # MEMORY COMMANDS
     if "remember" in message.lower():
-        add_message(user, message, "Stored.")
+        add_message(user, message, "Stored")
         return jsonify({"reply": "Noted. I will remember that."})
 
     if "recall" in message.lower():
-        return jsonify({"reply": recall_memory(user)})
+        return jsonify({"reply": get_memory_summary(user)})
 
-    personality = build_personality(user, is_admin, mode)
+    personality = build_personality(user)
 
     prompt = f"""
 {personality}
@@ -59,11 +55,6 @@ AI:
     add_message(user, message, reply)
 
     return jsonify({"reply": reply})
-
-
-@app.route("/")
-def home():
-    return "PH03NIX Brain Running"
 
 
 if __name__ == "__main__":
