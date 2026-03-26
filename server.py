@@ -2,30 +2,31 @@ from flask import Flask, request, jsonify
 import requests
 import os
 from personality import build_personality
-from memory import add_message
+from memory import add_message, load
 
 app = Flask(__name__)
 
-# This uses a FREE public lightweight model endpoint
-# (No OpenAI key required)
 MODEL_API = "https://api-inference.huggingface.co/models/google/flan-t5-base"
 
-HEADERS = {
-    "Content-Type": "application/json"
-}
+HEADERS = {"Content-Type": "application/json"}
 
 def query_model(prompt):
-    payload = {"inputs": prompt}
     try:
-        r = requests.post(MODEL_API, headers=HEADERS, json=payload, timeout=60)
+        r = requests.post(MODEL_API, headers=HEADERS, json={"inputs": prompt}, timeout=60)
         data = r.json()
-
         if isinstance(data, list):
             return data[0]["generated_text"]
-
-        return "I am thinking..."
+        return "Processing..."
     except:
-        return "PH03NIX brain is waking up..."
+        return "Systems initializing..."
+
+# 🧠 Memory recall
+def recall_memory(user):
+    data = load()
+    if user in data:
+        last = data[user][-3:]
+        return "Here is what I remember:\n" + "\n".join([f"You said: {x['message']}" for x in last])
+    return "No memory found."
 
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -35,6 +36,14 @@ def chat():
     message = data.get("message", "")
     is_admin = data.get("admin", False)
     mode = data.get("mode", "PH03NIX")
+
+    # 🧠 Memory command
+    if "remember" in message.lower():
+        add_message(user, message, "Stored.")
+        return jsonify({"reply": "Noted. I will remember that."})
+
+    if "recall" in message.lower():
+        return jsonify({"reply": recall_memory(user)})
 
     personality = build_personality(user, is_admin, mode)
 
