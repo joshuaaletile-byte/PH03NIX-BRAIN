@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>PH03NIX GRID</title>
+
+<style>
+body{
+margin:0;
+background:#061326;
+color:#FFD700;
+font-family:Arial;
+}
+
+.header{
+text-align:center;
+padding:15px;
+font-size:22px;
+box-shadow:0 0 20px gold;
+}
+
+#chat{
+height:65vh;
+overflow:auto;
+padding:10px;
+}
+
+.msg{
+margin:10px;
+padding:10px;
+border-radius:10px;
+max-width:80%;
+}
+
+.user{
+background:#0b2a4a;
+}
+
+.bot{
+background:#112f5c;
+box-shadow:0 0 10px gold;
+}
+
+.controls{
+position:fixed;
+bottom:0;
+width:100%;
+display:flex;
+gap:5px;
+padding:10px;
+background:#061326;
+}
+
+input{
+flex:1;
+padding:10px;
+border-radius:5px;
+border:none;
+}
+
+button{
+padding:10px;
+background:gold;
+border:none;
+border-radius:5px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">PH03NIX GRID</div>
+
+<div id="chat"></div>
+
+<div class="controls">
+<input id="msg" placeholder="Say 'Hey PH03NIX' or type..." />
+<button onclick="send()">Send</button>
+<button onclick="startWake()">🎤</button>
+</div>
+
+<script>
+let username = "User";
+
+// 🔊 JARVIS VOICE
+function speak(text){
+let voices = speechSynthesis.getVoices();
+
+let v = voices.find(voice => voice.name.toLowerCase().includes("male"));
+
+let speech = new SpeechSynthesisUtterance(text);
+
+if(v) speech.voice = v;
+
+speech.rate = 0.9;
+speech.pitch = 0.6;
+
+speechSynthesis.speak(speech);
+}
+
+// ADD MESSAGE
+function add(text,type){
+let div=document.createElement("div");
+div.className="msg "+type;
+div.innerHTML=text;
+document.getElementById("chat").appendChild(div);
+}
+
+// SEND
+async function send(){
+let msg=document.getElementById("msg").value;
+document.getElementById("msg").value="";
+
+add("<b>You:</b> "+msg,"user");
+
+let res=await fetch("/send",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({username:username,message:msg})
+});
+
+let data=await res.json();
+
+add("<b>PH03NIX:</b> "+data.reply,"bot");
+
+speak(data.reply);
+}
+
+// 🎤 WAKE WORD
+function startWake(){
+const rec=new (window.SpeechRecognition||window.webkitSpeechRecognition)();
+rec.lang="en-US";
+rec.continuous=true;
+
+rec.onresult=(e)=>{
+let text=e.results[e.results.length-1][0].transcript.toLowerCase();
+
+if(text.includes("hey phoenix")){
+speak("Yes. I am listening.");
+rec.stop();
+startCommand();
+}
+};
+
+rec.onend=()=>{startWake();};
+
+rec.start();
+}
+
+// 🎤 COMMAND MODE
+function startCommand(){
+const rec=new (window.SpeechRecognition||window.webkitSpeechRecognition)();
+rec.lang="en-US";
+rec.start();
+
+rec.onresult=(e)=>{
+let cmd=e.results[0][0].transcript;
+document.getElementById("msg").value=cmd;
+send();
+};
+}
+</script>
+
+</body>
+</html>
